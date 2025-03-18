@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchOrders, fetchOrderDetails, processOrder, updateOrder, approveOrder } from './services/api';
 import { Search, Edit2, Check, RefreshCw, Info } from 'lucide-react';
 import './App.css';
+import ProviderList from './components/ProviderList';
+import DocumentPreview from './components/DocumentPreview';
 
 function App() {
   const [orders, setOrders] = useState([]);
@@ -201,8 +203,8 @@ function App() {
                   onClick={() => handleProcessOrder(selectedOrder.order_id)}
                   disabled={processingOrder}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" /> 
-                  {processingOrder ? 'Processing...' : 'Process'}
+                  <RefreshCw className={`h-4 w-4 mr-2 ${processingOrder ? 'animate-spin' : ''}`} />
+                  Process
                 </button>
                 
                 {selectedOrder.extracted_data && (
@@ -235,6 +237,11 @@ function App() {
               </div>
             </div>
             
+            {/* Add Document Preview */}
+            <div className="mb-6">
+              <DocumentPreview orderId={selectedOrder.order_id} />
+            </div>
+
             {selectedOrder.extracted_data ? (
               <div className="bg-white shadow overflow-hidden sm:rounded-lg">
                 <div className="px-4 py-5 sm:px-6">
@@ -278,6 +285,9 @@ function App() {
                     ))}
                   </dl>
                 </div>
+                
+                {/* Provider List */}
+                <ProviderList orderId={selectedOrder.order_id} />
               </div>
             ) : (
               <div className="bg-white shadow rounded-lg p-6">

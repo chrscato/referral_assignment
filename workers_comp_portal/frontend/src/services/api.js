@@ -51,3 +51,17 @@ export const approveOrder = async (orderId) => {
     throw error;
   }
 };
+
+export const fetchOrderDocuments = async (orderId) => {
+  try {
+    const response = await axios.get(`${API_URL}/orders/${orderId}/documents`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching documents for order ${orderId}:`, error);
+    throw error;
+  }
+};
+
+export const getDocumentPreviewUrl = (orderId, filename) => {
+  return `${API_URL}/orders/${orderId}/documents/${filename}`;
+};

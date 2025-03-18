@@ -6,6 +6,9 @@
     <title>Workers Comp Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <!-- OpenStreetMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         .loader {
             border: 4px solid #f3f3f3;
@@ -19,6 +22,133 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .provider-marker {
+            background-color: white;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            text-align: center;
+            color: #3b82f6;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+        }
+        .patient-marker {
+            background-color: white;
+            border: 2px solid #ef4444;
+            border-radius: 50%;
+            text-align: center;
+            color: #ef4444;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+        }
+        .document-preview {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .document-preview-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .document-preview-content {
+            padding: 1rem;
+        }
+        
+        .document-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .document-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .document-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+        
+        .document-item:hover {
+            background-color: #f9fafb;
+        }
+        
+        .document-item.selected {
+            background-color: #eff6ff;
+            border-color: #bfdbfe;
+        }
+        
+        .document-icon {
+            color: #6b7280;
+            margin-right: 0.75rem;
+        }
+        
+        .document-info {
+            flex: 1;
+        }
+        
+        .document-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #111827;
+        }
+        
+        .document-meta {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        
+        .preview-area {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            min-height: 600px;
+        }
+        
+        .preview-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #6b7280;
+        }
+        
+        .preview-pdf {
+            width: 100%;
+            height: 600px;
+            border: none;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .preview-text {
+            white-space: pre-wrap;
+            font-size: 0.875rem;
         }
     </style>
 </head>
@@ -62,11 +192,33 @@
         </div>
     </div>
 
+    <div id="document-preview" class="document-preview" style="display: none;">
+        <div class="document-preview-header">
+            <h2 class="text-lg font-medium">Documents</h2>
+        </div>
+        
+        <div class="document-preview-content">
+            <div class="document-grid">
+                <!-- Document List -->
+                <div class="document-list" id="document-list">
+                    <!-- Documents will be populated here -->
+                </div>
+
+                <!-- Preview Area -->
+                <div class="preview-area" id="preview-area">
+                    <div class="preview-placeholder">Select a document to preview</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let allOrders = [];
         let selectedOrderId = null;
         let isEditing = false;
+        let map = null;
+        let markers = [];
         
         // Load orders on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -124,50 +276,6 @@
             });
             
             container.innerHTML = html;
-        }
-        
-        // Function to load order details
-        function loadOrderDetails(orderId) {
-            selectedOrderId = orderId;
-            
-            // Update selected order in sidebar
-            const allOrderElements = document.querySelectorAll('#orders-container > div');
-            allOrderElements.forEach(el => {
-                el.classList.remove('border-blue-500', 'bg-blue-50');
-                el.classList.add('border-gray-200');
-            });
-            
-            const selectedElement = document.querySelector(`#orders-container > div[onclick="loadOrderDetails('${orderId}')"]`);
-            if (selectedElement) {
-                selectedElement.classList.remove('border-gray-200');
-                selectedElement.classList.add('border-blue-500', 'bg-blue-50');
-            }
-            
-            // Show loading state
-            document.getElementById('order-details').innerHTML = `
-                <div class="flex justify-center items-center h-full">
-                    <div class="loader"></div>
-                    <span class="ml-2">Loading order details...</span>
-                </div>
-            `;
-            
-            // Fetch order details
-            fetch(`/api/orders/${orderId}`)
-                .then(response => response.json())
-                .then(data => {
-                    renderOrderDetails(data);
-                })
-                .catch(error => {
-                    console.error('Error loading order details:', error);
-                    document.getElementById('order-details').innerHTML = `
-                        <div class="flex items-center justify-center h-full text-red-500">
-                            <div class="text-center">
-                                <div class="text-lg">Error loading order details</div>
-                                <div class="text-sm mt-2">${error.message || 'Please try again'}</div>
-                            </div>
-                        </div>
-                    `;
-                });
         }
         
         // Function to render order details
@@ -234,7 +342,7 @@
             
             if (order.extracted_data) {
                 html += `
-                    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
                         <div class="px-4 py-5 sm:px-6">
                             <h3 class="text-lg leading-6 font-medium text-gray-900">Extracted Information</h3>
                             <p class="mt-1 max-w-2xl text-sm text-gray-500" id="edit-mode-text">
@@ -301,6 +409,38 @@
                             Save Changes
                         </button>
                     </div>
+
+                    <!-- Provider Section -->
+                    <div id="providers-section" class="bg-white shadow overflow-hidden sm:rounded-lg mt-6">
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">Nearby Providers</h3>
+                            <p class="mt-1 max-w-2xl text-sm text-gray-500" id="patient-location">
+                                Loading providers...
+                            </p>
+                            <!-- Add procedure code input -->
+                            <div class="mt-3 flex items-center">
+                                <label for="proc-code" class="block text-sm font-medium text-gray-700 mr-2">
+                                    Procedure Code:
+                                </label>
+                                <input
+                                    type="text"
+                                    id="proc-code"
+                                    class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-32 sm:text-sm border-gray-300 rounded-md"
+                                    placeholder="e.g. 99213"
+                                    onchange="refreshProviders()"
+                                    value="${order.extracted_data.cpt_code?.value || ''}"
+                                />
+                            </div>
+                        </div>
+                        
+                        <!-- Map -->
+                        <div id="map"></div>
+                        
+                        <!-- Provider List -->
+                        <ul class="divide-y divide-gray-200" id="provider-list">
+                            <!-- Providers will be inserted here -->
+                        </ul>
+                    </div>
                 `;
             } else {
                 html += `
@@ -315,173 +455,233 @@
             
             html += `</div>`;
             container.innerHTML = html;
-        }
-        
-        // Function to toggle editing mode
-        function toggleEditing() {
-            isEditing = !isEditing;
-            
-            const viewModes = document.querySelectorAll('.view-mode');
-            const editModes = document.querySelectorAll('.edit-mode');
-            const editControls = document.getElementById('edit-controls');
-            const editBtn = document.getElementById('edit-btn');
-            const approveBtn = document.getElementById('approve-btn');
-            const editModeText = document.getElementById('edit-mode-text');
-            
-            if (isEditing) {
-                viewModes.forEach(el => el.style.display = 'none');
-                editModes.forEach(el => el.style.display = 'block');
-                editControls.style.display = 'flex';
-                approveBtn.style.display = 'none';
-                editBtn.style.display = 'none';
-                editModeText.textContent = 'Edit fields as needed before approving';
-            } else {
-                viewModes.forEach(el => el.style.display = 'block');
-                editModes.forEach(el => el.style.display = 'none');
-                editControls.style.display = 'none';
-                approveBtn.style.display = 'flex';
-                editBtn.textContent = 'Edit';
-                editBtn.style.display = 'flex';
-                editModeText.textContent = 'Review the extracted information for accuracy';
+
+            // Load providers if we have extracted data
+            if (order.extracted_data) {
+                loadProviders(order.order_id);
             }
         }
-        
-        // Function to cancel editing
-        function cancelEditing() {
-            toggleEditing();
-        }
-        
-        // Function to save changes
-        function saveChanges(orderId) {
-            const inputs = document.querySelectorAll('.edit-mode input');
-            const extractedData = {};
+
+        // Function to load order details
+        function loadOrderDetails(orderId) {
+            selectedOrderId = orderId;
             
-            inputs.forEach(input => {
-                const fieldName = input.dataset.field;
-                extractedData[fieldName] = {
-                    value: input.value
-                };
+            // Update selected order in sidebar
+            const allOrderElements = document.querySelectorAll('#orders-container > div');
+            allOrderElements.forEach(el => {
+                el.classList.remove('border-blue-500', 'bg-blue-50');
+                el.classList.add('border-gray-200');
             });
             
-            // Show saving indicator
-            const editControls = document.getElementById('edit-controls');
-            editControls.innerHTML = `
-                <div class="loader mr-2"></div>
-                <span>Saving changes...</span>
+            const selectedElement = document.querySelector(`#orders-container > div[onclick="loadOrderDetails('${orderId}')"]`);
+            if (selectedElement) {
+                selectedElement.classList.remove('border-gray-200');
+                selectedElement.classList.add('border-blue-500', 'bg-blue-50');
+            }
+            
+            // Show loading state
+            document.getElementById('order-details').innerHTML = `
+                <div class="flex justify-center items-center h-full">
+                    <div class="loader"></div>
+                    <span class="ml-2">Loading order details...</span>
+                </div>
             `;
             
-            fetch(`/api/orders/${orderId}/update`, {
+            // Reset map if it exists
+            if (map) {
+                map.remove();
+                map = null;
+            }
+            
+            // Fetch order details
+            fetch(`/api/orders/${orderId}`)
+                .then(response => response.json())
+                .then(data => {
+                    renderOrderDetails(data);
+                    // Load documents after rendering order details
+                    loadDocuments(orderId);
+                })
+                .catch(error => {
+                    console.error('Error loading order details:', error);
+                    document.getElementById('order-details').innerHTML = `
+                        <div class="flex items-center justify-center h-full text-red-500">
+                            <div class="text-center">
+                                <div class="text-lg">Error loading order details</div>
+                                <div class="text-sm mt-2">${error.message || 'Please try again'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+        }
+
+        // Function to load providers
+        function loadProviders(orderId) {
+            console.log('Loading providers for order:', orderId);
+            
+            const procCode = document.getElementById('proc-code')?.value;
+            const url = procCode ? 
+                `/api/orders/${orderId}/providers?proc_code=${encodeURIComponent(procCode)}` :
+                `/api/orders/${orderId}/providers`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Provider data:', data);
+                    
+                    // Update patient location text
+                    document.getElementById('patient-location').textContent = 
+                        `Patient Location: ${data.patient_location.address}`;
+                    
+                    // Initialize map
+                    initMap(data.map_center);
+                    
+                    // Create array to store all coordinates
+                    const coordinates = [];
+                    
+                    // Add patient marker
+                    const patientMarker = L.marker([data.patient_location.latitude, data.patient_location.longitude], {
+                        icon: createCustomMarker('patient-marker', 'IW')
+                    }).addTo(map)
+                      .bindPopup('Injured Worker Location');
+                    
+                    // Add patient location to coordinates
+                    coordinates.push([data.patient_location.latitude, data.patient_location.longitude]);
+                    
+                    // Clear existing provider list
+                    const providerList = document.getElementById('provider-list');
+                    providerList.innerHTML = '';
+                    
+                    // Add providers
+                    data.providers.forEach((provider, index) => {
+                        // Add marker to map
+                        if (provider.lat && provider.lon) {
+                            const marker = L.marker([provider.lat, provider.lon], {
+                                icon: createCustomMarker('provider-marker', index + 1)
+                            }).addTo(map)
+                              .bindPopup(`
+                                <b>${provider['DBA Name Billing Name']}</b><br>
+                                ${provider.distance_miles} miles away<br>
+                                ${provider.rate !== undefined ? 
+                                    (provider.rate ? 
+                                        `<b>Rate: $${provider.rate.toFixed(2)}</b>` : 
+                                        'Rate: Not available') 
+                                    : ''}
+                              `);
+                            
+                            // Add provider location to coordinates
+                            coordinates.push([provider.lat, provider.lon]);
+                        }
+                        
+                        // Add to list
+                        const li = document.createElement('li');
+                        li.className = 'px-4 py-4';
+                        li.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center">
+                                        <div class="provider-marker mr-3">${index + 1}</div>
+                                        <div>
+                                            <h4 class="text-sm font-medium text-gray-900">
+                                                ${provider['DBA Name Billing Name']}
+                                            </h4>
+                                            <div class="mt-1 text-sm text-gray-500">
+                                                <p>TIN: ${provider.TIN}</p>
+                                                <p>${provider.City}, ${provider.State}</p>
+                                                <p>Network: ${provider['Provider Network']}</p>
+                                                <p>Type: ${provider['Provider Type']}</p>
+                                                <p class="mt-1 font-medium ${provider.rate ? 'text-green-600' : 'text-gray-500'}">
+                                                    Rate: ${provider.rate ? `$${provider.rate.toFixed(2)}` : 'Not available'}
+                                                </p>
+                                                <div class="mt-2">
+                                                    ${provider.Email ? `<p>Email: ${provider.Email}</p>` : ''}
+                                                    ${provider['Fax Number'] ? `<p>Fax: ${provider['Fax Number']}</p>` : ''}
+                                                    ${provider.Phone ? `<p>Phone: ${provider.Phone}</p>` : ''}
+                                                    ${provider.Website ? `<p>Website: <a href="${provider.Website}" target="_blank" class="text-blue-600 hover:underline">${provider.Website}</a></p>` : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="ml-4 flex flex-col items-end">
+                                    <div class="text-sm text-gray-500">
+                                        <span class="font-medium">${provider.distance_miles}</span> miles away
+                                    </div>
+                                    <button 
+                                        onclick="selectProvider('${provider.PrimaryKey}')"
+                                        class="mt-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        Select Provider
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        providerList.appendChild(li);
+                    });
+                    
+                    // Fit map to show all markers if we have coordinates
+                    if (coordinates.length > 0) {
+                        const bounds = L.latLngBounds(coordinates);
+                        map.fitBounds(bounds, {
+                            padding: [50, 50], // Add padding around the bounds
+                            maxZoom: 12 // Limit maximum zoom level
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading providers:', error);
+                    document.getElementById('providers-section').innerHTML = `
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">Nearby Providers</h3>
+                            <div class="text-red-500 text-sm mt-2">
+                                Error loading providers: ${error.message}
+                            </div>
+                        </div>
+                    `;
+                });
+        }
+
+        function initMap(center) {
+            if (map) {
+                map.remove();
+            }
+
+            map = L.map('map');
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        function createCustomMarker(className, number) {
+            const el = document.createElement('div');
+            el.className = className;
+            el.textContent = number;
+            return L.divIcon({
+                html: el,
+                className: 'custom-marker',
+                iconSize: [24, 24]
+            });
+        }
+
+        function selectProvider(providerId) {
+            fetch(`/api/orders/${selectedOrderId}/select-provider`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    extracted_data: extractedData
-                })
+                body: JSON.stringify({ provider_id: providerId })
             })
             .then(response => response.json())
             .then(data => {
-                // Reload order details
-                loadOrderDetails(orderId);
-                alert('Changes saved successfully');
+                alert('Provider selected successfully');
+                loadOrderDetails(selectedOrderId);
             })
             .catch(error => {
-                console.error('Error saving changes:', error);
-                alert('Failed to save changes: ' + error.message);
-                // Restore controls
-                editControls.innerHTML = `
-                    <button 
-                        class="mr-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                        onclick="cancelEditing()"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                        onclick="saveChanges('${orderId}')"
-                    >
-                        Save Changes
-                    </button>
-                `;
+                console.error('Error selecting provider:', error);
+                alert('Error selecting provider: ' + error.message);
             });
         }
-        
-        // Function to process an order
-        function processOrder(orderId) {
-            const processBtn = document.getElementById('process-btn');
-            processBtn.disabled = true;
-            processBtn.innerHTML = `
-                <div class="loader mr-2 h-4 w-4"></div>
-                Processing...
-            `;
-            
-            fetch(`/api/orders/${orderId}/process`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Reload order details and orders list
-                loadOrderDetails(orderId);
-                loadOrders();
-                alert('Order processed successfully');
-            })
-            .catch(error => {
-                console.error('Error processing order:', error);
-                alert('Failed to process order: ' + error.message);
-                processBtn.disabled = false;
-                processBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Process
-                `;
-            });
-        }
-        
-        // Function to approve an order
-        function approveOrder(orderId) {
-            const approveBtn = document.getElementById('approve-btn');
-            approveBtn.disabled = true;
-            approveBtn.innerHTML = `
-                <div class="loader mr-2 h-4 w-4"></div>
-                Approving...
-            `;
-            
-            fetch(`/api/orders/${orderId}/approve`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Reload order details and orders list
-                loadOrderDetails(orderId);
-                loadOrders();
-                alert('Order approved for CRM insertion');
-            })
-            .catch(error => {
-                console.error('Error approving order:', error);
-                alert('Failed to approve order: ' + error.message);
-                approveBtn.disabled = false;
-                approveBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Approve for CRM
-                `;
-            });
-        }
-        
-        // Function to filter orders
-        function filterOrders() {
-            const searchTerm = document.getElementById('search-input').value.toLowerCase();
-            const filteredOrders = allOrders.filter(order => 
-                order.order_id.toLowerCase().includes(searchTerm) ||
-                (order.patient_name && order.patient_name.toLowerCase().includes(searchTerm))
-            );
-            
-            renderOrders(filteredOrders);
-        }
-        
-        // Helper function to get status badge color
+
+        // Helper functions for status colors
         function getStatusBadgeColor(status) {
             if (!status) return 'bg-gray-100 text-gray-800';
             
@@ -495,7 +695,6 @@
             }
         }
         
-        // Helper function to get confidence color
         function getConfidenceColor(confidence) {
             if (!confidence) return 'bg-gray-400';
             
@@ -504,6 +703,183 @@
                 case 'medium': return 'bg-yellow-400';
                 case 'low': return 'bg-red-400';
                 default: return 'bg-gray-400';
+            }
+        }
+
+        // Function to filter orders
+        function filterOrders() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const filteredOrders = allOrders.filter(order => 
+                order.order_id.toLowerCase().includes(searchTerm) ||
+                (order.patient_name && order.patient_name.toLowerCase().includes(searchTerm))
+            );
+            
+            renderOrders(filteredOrders);
+        }
+
+        // Add this new function
+        function refreshProviders() {
+            if (selectedOrderId) {
+                loadProviders(selectedOrderId);
+            }
+        }
+
+        // Document preview functionality
+        let currentOrderId = null;
+
+        function loadDocuments(orderId) {
+            currentOrderId = orderId;
+            const documentList = document.getElementById('document-list');
+            const previewArea = document.getElementById('preview-area');
+            const documentPreview = document.getElementById('document-preview');
+            
+            // Show the document preview section
+            documentPreview.style.display = 'block';
+            
+            // Clear previous content
+            documentList.innerHTML = '';
+            previewArea.innerHTML = '<div class="preview-placeholder">Loading documents...</div>';
+            
+            // Fetch documents
+            fetch(`/api/orders/${orderId}/documents`)
+                .then(response => response.json())
+                .then(documents => {
+                    // Clear loading state
+                    previewArea.innerHTML = '<div class="preview-placeholder">Select a document to preview</div>';
+                    
+                    // Populate document list
+                    documents.forEach(doc => {
+                        const docElement = createDocumentElement(doc);
+                        documentList.appendChild(docElement);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading documents:', error);
+                    previewArea.innerHTML = '<div class="preview-placeholder">Error loading documents</div>';
+                });
+        }
+
+        function createDocumentElement(doc) {
+            const div = document.createElement('div');
+            div.className = 'document-item';
+            div.onclick = () => previewDocument(doc);
+            
+            // Create icon
+            const icon = document.createElement('span');
+            icon.className = 'document-icon';
+            icon.innerHTML = getFileIcon(doc.type);
+            
+            // Create info container
+            const info = document.createElement('div');
+            info.className = 'document-info';
+            
+            // Create name
+            const name = document.createElement('div');
+            name.className = 'document-name';
+            name.textContent = doc.name;
+            
+            // Create meta info
+            const meta = document.createElement('div');
+            meta.className = 'document-meta';
+            meta.textContent = `${formatFileSize(doc.size)} • ${doc.type}`;
+            
+            // Assemble
+            info.appendChild(name);
+            info.appendChild(meta);
+            div.appendChild(icon);
+            div.appendChild(info);
+            
+            return div;
+        }
+
+        function getFileIcon(type) {
+            switch (type) {
+                case '.pdf':
+                    return '📄';
+                case '.jpg':
+                case '.jpeg':
+                case '.png':
+                case '.gif':
+                case '.bmp':
+                case '.tif':
+                case '.tiff':
+                    return '🖼️';
+                case '.eml':
+                    return '📧';
+                default:
+                    return '📁';
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function previewDocument(doc) {
+            const previewArea = document.getElementById('preview-area');
+            
+            // Update selected state
+            document.querySelectorAll('.document-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            // Clear previous preview
+            previewArea.innerHTML = '';
+            
+            // Create preview based on file type
+            if (doc.type === '.pdf') {
+                const iframe = document.createElement('iframe');
+                iframe.className = 'preview-pdf';
+                iframe.src = `/api/orders/${currentOrderId}/documents/${doc.name}`;
+                previewArea.appendChild(iframe);
+            } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff'].includes(doc.type)) {
+                const img = document.createElement('img');
+                img.className = 'preview-image';
+                img.src = `/api/orders/${currentOrderId}/documents/${doc.name}`;
+                img.alt = doc.name;
+                img.onerror = function() {
+                    // If image fails to load, show error message
+                    this.onerror = null; // Prevent infinite loop
+                    previewArea.innerHTML = `
+                        <div class="preview-error">
+                            <p class="text-red-500">Error loading image. This might be a corrupted or unsupported image file.</p>
+                            <p class="text-sm text-gray-500 mt-2">File type: ${doc.type}</p>
+                            <p class="text-sm text-gray-500">Size: ${formatFileSize(doc.size)}</p>
+                        </div>
+                    `;
+                };
+                previewArea.appendChild(img);
+            } else if (doc.type === '.txt' || doc.type === '.eml') {
+                const pre = document.createElement('pre');
+                pre.className = 'preview-text';
+                
+                if (doc.type === '.eml') {
+                    // For email files, fetch the formatted content
+                    fetch(`/api/orders/${currentOrderId}/documents/${doc.name}`)
+                        .then(response => response.text())
+                        .then(content => {
+                            if (!content.trim()) {
+                                pre.textContent = 'Email content is empty or could not be extracted.';
+                            } else {
+                                pre.textContent = content;
+                            }
+                            previewArea.appendChild(pre);
+                        })
+                        .catch(error => {
+                            console.error('Error loading email content:', error);
+                            pre.textContent = 'Error loading email content. The file might be corrupted or in an unsupported format.';
+                            previewArea.appendChild(pre);
+                        });
+                } else {
+                    // For text files, use OCR text
+                    pre.textContent = doc.ocr_text || 'No OCR text available';
+                    previewArea.appendChild(pre);
+                }
             }
         }
     </script>
