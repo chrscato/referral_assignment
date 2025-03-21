@@ -1,12 +1,11 @@
-from flask import Flask, jsonify, request, send_file, Response
+from flask import Flask, jsonify, request, send_file, Response, render_template, redirect, url_for
 from flask_cors import CORS
 import os
 import sys
 import json
 from pathlib import Path
-# Add to your imports at the top
-from flask import Flask, jsonify, request, render_template
 import datetime
+import random  # For mock dashboard data
 
 # Add the path to your existing code
 sys.path.append(r'C:\Users\ChristopherCato\OneDrive - clarity-dx.com\Intake AI Agent\referrals')
@@ -20,18 +19,124 @@ from provider_mapping_simple import find_nearest_providers, test_database_connec
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Set secret key for session
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+
 # Configure paths
 INPUT_DIR = Path(r'C:\Users\ChristopherCato\OneDrive - clarity-dx.com\Intake AI Agent\data\orders')
 OUTPUT_DIR = Path(r'C:\Users\ChristopherCato\OneDrive - clarity-dx.com\Intake AI Agent\data\results')
 OCR_DIR = Path(r'C:\Users\ChristopherCato\OneDrive - clarity-dx.com\Intake AI Agent\data\ocr')
 
-
-# Then change your app to serve the template at the root route:
+# Root route redirects to dashboard
 @app.route('/')
+def root():
+    return redirect(url_for('dashboard'))
+
+# Orders page
+@app.route('/orders')
 def index():
-    return render_template('index.html')
+    # Get selected order ID from query params if any
+    selected_order = request.args.get('order')
+    # Instead of passing current_user, we'll use a mock user
+    mock_user = {"name": "Demo User"}
+    return render_template('index.html', selected_order=selected_order, current_user=mock_user)
 
+@app.route('/dashboard')
+def dashboard():
+    # Get all orders
+    orders = []
+    for folder in INPUT_DIR.glob("*"):
+        if folder.is_dir():
+            order_id = folder.name
+            result_path = OUTPUT_DIR / f"{order_id}_results.json"
+            status = "Processed" if result_path.exists() else "Pending"
+            
+            order_info = {
+                "order_id": order_id,
+                "status": status,
+                "processed_date": None,
+                "patient_name": "Unknown Patient"
+            }
+            
+            if result_path.exists():
+                try:
+                    with open(result_path, 'r', encoding='utf-8') as f:
+                        result = json.load(f)
+                        # Add extracted patient name if available
+                        if "extracted_data" in result and "patient_name" in result["extracted_data"]:
+                            patient_data = result["extracted_data"]["patient_name"]
+                            if isinstance(patient_data, dict) and "value" in patient_data:
+                                order_info["patient_name"] = patient_data["value"]
+                                
+                        # Add status and date
+                        order_info["status"] = result.get("status", status)
+                        order_info["processed_date"] = result.get("processed_date")
+                except Exception as e:
+                    print(f"Error reading result file: {str(e)}")
+            
+            orders.append(order_info)
+    
+    # Calculate stats
+    total_orders = len(orders)
+    pending_orders = sum(1 for order in orders if order['status'].lower() == 'pending')
+    processed_orders = sum(1 for order in orders if order['status'].lower() == 'processed')
+    approved_orders = sum(1 for order in orders if order['status'].lower() == 'approved')
+    error_orders = sum(1 for order in orders if 'error' in order['status'].lower())
+    
+    # Generate random data for timeline (last 7 days)
+    today = datetime.datetime.now()
+    timeline_labels = []
+    timeline_data = []
+    for i in range(6, -1, -1):
+        day = today - datetime.timedelta(days=i)
+        timeline_labels.append(day.strftime('%b %d'))
+        timeline_data.append(random.randint(0, 5))  # Random data for demonstration
+    
+    # Calculate percentages
+    pending_percentage = round((pending_orders / total_orders * 100) if total_orders > 0 else 0)
+    processed_percentage = round((processed_orders / total_orders * 100) if total_orders > 0 else 0)
+    approved_percentage = round((approved_orders / processed_orders * 100) if processed_orders > 0 else 0)
+    
+    # Prepare stats
+    stats = {
+        'total_orders': total_orders,
+        'pending_orders': pending_orders,
+        'processed_orders': processed_orders,
+        'approved_orders': approved_orders,
+        'error_orders': error_orders,
+        'new_orders_today': random.randint(0, 3),  # Random for demonstration
+        'pending_percentage': pending_percentage,
+        'processed_percentage': processed_percentage,
+        'approved_percentage': approved_percentage
+    }
+    
+    # Get 5 most recent orders
+    recent_orders = sorted(orders, key=lambda x: x.get('processed_date', '') or '', reverse=True)[:5]
+    # Add status class for UI
+    for order in recent_orders:
+        status = order.get('status', '').lower()
+        if status == 'approved':
+            order['status_class'] = 'bg-green-100 text-green-800'
+        elif status == 'processed':
+            order['status_class'] = 'bg-yellow-100 text-yellow-800'
+        elif status == 'pending':
+            order['status_class'] = 'bg-blue-100 text-blue-800'
+        elif 'error' in status:
+            order['status_class'] = 'bg-red-100 text-red-800'
+        else:
+            order['status_class'] = 'bg-gray-100 text-gray-800'
+    
+    # Instead of passing current_user, we'll use a mock user
+    mock_user = {"name": "Demo User"}
+    
+    return render_template('dashboard.html', 
+                          stats=stats, 
+                          recent_orders=recent_orders,
+                          timeline_labels=json.dumps(timeline_labels),
+                          timeline_data=json.dumps(timeline_data),
+                          current_user=mock_user)
 
+# API Routes
 @app.route('/api/orders', methods=['GET'])
 def get_orders():
     """Get all orders"""

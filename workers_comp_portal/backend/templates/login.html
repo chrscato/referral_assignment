@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workers Comp Portal - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f3f4f6;
+        }
+        .login-form {
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 2rem;
+            width: 100%;
+            max-width: 28rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-control {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #4b5563;
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .form-control:focus {
+            border-color: #93c5fd;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+        }
+        .btn-primary {
+            color: #fff;
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        .alert {
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem;
+            border: 1px solid transparent;
+            border-radius: 0.25rem;
+        }
+        .alert-danger {
+            color: #842029;
+            background-color: #f8d7da;
+            border-color: #f5c2c7;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-form">
+            <h2 class="text-2xl font-bold mb-6 text-center">Workers Comp Portal</h2>
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="{{ url_for('login') }}">
+                {{ form.csrf_token }}
+                
+                <div class="form-group">
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    {{ form.email(class="form-control", placeholder="Enter your email") }}
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    {{ form.password(class="form-control", placeholder="Enter your password") }}
+                </div>
+                
+                <div class="form-group">
+                    <div class="flex items-center">
+                        {{ form.remember(class="h-4 w-4 text-blue-600 border-gray-300 rounded") }}
+                        <label for="remember" class="ml-2 block text-sm text-gray-900">Remember me</label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit" class="btn-primary">Sign In</button>
+                </div>
+            </form>
+            
+            <div class="mt-4 text-center text-sm text-gray-600">
+                <p>Demo Credentials:</p>
+                <p>Email: admin@example.com</p>
+                <p>Password: admin123</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
