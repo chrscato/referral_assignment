@@ -239,16 +239,14 @@ def update_order(order_id):
         with open(result_path, 'r', encoding='utf-8') as f:
             results = json.load(f)
         
-        # Update extracted data fields
+        # Update extracted data fields if provided
         if 'extracted_data' in data:
-            for field, field_data in data['extracted_data'].items():
-                if field in results['extracted_data']:
-                    # Update the value but keep track of original
-                    if 'original_value' not in results['extracted_data'][field]:
-                        results['extracted_data'][field]['original_value'] = results['extracted_data'][field]['value']
-                    
-                    results['extracted_data'][field]['value'] = field_data['value']
-                    results['extracted_data'][field]['edited'] = True
+            # Handle complete replacement of extracted data
+            results['extracted_data'] = data['extracted_data']
+            
+            # Add edit timestamp
+            results['last_edited'] = str(datetime.datetime.now())
+            results['edited_by'] = "User"  # In a real app, use the actual user
         
         # Save updated results
         with open(result_path, 'w', encoding='utf-8') as f:
@@ -257,6 +255,7 @@ def update_order(order_id):
         return jsonify({"message": f"Order {order_id} updated successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
 
 @app.route('/api/orders/<order_id>/approve', methods=['POST'])
 def approve_order(order_id):
@@ -355,6 +354,92 @@ def get_order_providers(order_id):
         print(f"Error in get_order_providers: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    
+    
+@app.route('/api/orders/<order_id>/package-for-crm', methods=['POST'])
+def package_for_crm(order_id):
+    """Package order data for CRM insertion"""
+    try:
+        result_path = OUTPUT_DIR / f"{order_id}_results.json"
+        
+        if not result_path.exists():
+            return jsonify({"error": f"Order results not found: {order_id}"}), 404
+        
+        # Read current results
+        with open(result_path, 'r', encoding='utf-8') as f:
+            results = json.load(f)
+        
+        # Create CRM insertion folder
+        crm_dir = Path(r'C:\Users\ChristopherCato\OneDrive - clarity-dx.com\Intake AI Agent\data\crm_ready')
+        order_crm_dir = crm_dir / order_id
+        order_crm_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Create CRM-ready format from results
+        crm_data = {
+            "order_id": order_id,
+            "patient_info": {},
+            "procedures": [],
+            "provider_data": {}
+        }
+        
+        # Extract patient information
+        for field, data in results['extracted_data']['patient_info'].items():
+            if data['value'] and data['value'] != "not found" and data['value'] != "null":
+                crm_data['patient_info'][field] = data['value']
+        
+        # Extract procedures
+        for procedure in results['extracted_data']['procedures']:
+            proc_data = {}
+            for field, data in procedure.items():
+                if data['value'] and data['value'] != "not found" and data['value'] != "null":
+                    proc_data[field] = data['value']
+            
+            if proc_data:  # Only add if we have data
+                crm_data['procedures'].append(proc_data)
+        
+        # Add provider information if available
+        if 'provider_mapping' in results and results['provider_mapping']['status'] == 'success':
+            for proc_mapping in results['provider_mapping']['procedures']:
+                if 'providers' in proc_mapping and proc_mapping['providers']:
+                    # Just get the first provider for each procedure (closest one)
+                    provider = proc_mapping['providers'][0]
+                    
+                    # Match provider to procedure by CPT code if possible
+                    cpt_code = proc_mapping.get('cpt_code')
+                    
+                    # Add to provider data
+                    if cpt_code not in crm_data['provider_data']:
+                        crm_data['provider_data'][cpt_code] = []
+                    
+                    provider_info = {
+                        "name": provider.get("DBA Name Billing Name"),
+                        "address": f"{provider.get('City')}, {provider.get('State')}",
+                        "phone": provider.get("Phone"),
+                        "fax": provider.get("Fax Number"),
+                        "network_status": provider.get("Provider Network"),
+                        "distance_miles": provider.get("distance_miles")
+                    }
+                    crm_data['provider_data'][cpt_code].append(provider_info)
+        
+        # Save the final CRM-ready JSON
+        crm_json_path = order_crm_dir / f"{order_id}_crm.json"
+        with open(crm_json_path, 'w', encoding='utf-8') as f:
+            json.dump(crm_data, f, indent=2)
+            
+        # Mark order as "Ready for CRM"
+        results['status'] = 'Ready for CRM'
+        results['crm_ready_date'] = str(datetime.datetime.now())
+        
+        # Save updated results back to results file
+        with open(result_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2)
+        
+        return jsonify({
+            "message": f"Order {order_id} packaged for CRM insertion",
+            "crm_path": str(crm_json_path)
+        })
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/orders/<order_id>/select-provider', methods=['POST'])

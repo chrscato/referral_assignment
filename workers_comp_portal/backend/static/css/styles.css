@@ -13,6 +13,28 @@
     100% { transform: rotate(360deg); }
 }
 
+/* Confidence badges */
+.confidence-high {
+    background-color: #DEF7EC;
+    color: #03543E;
+}
+
+.confidence-medium {
+    background-color: #FEF3C7;
+    color: #92400E;
+}
+
+.confidence-low {
+    background-color: #FEE2E2;
+    color: #991B1B;
+}
+
+.confidence-not-found {
+    background-color: #E5E7EB;
+    color: #374151;
+}
+
+
 /* Map styles */
 #map {
     height: 400px;
