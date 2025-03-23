@@ -316,11 +316,11 @@ function previewDocument(doc) {
                         const pageNumContainer = document.createElement('div');
                         pageNumContainer.className = 'text-sm';
                         
-                        const currentPage = document.createElement('span');
-                        currentPage.textContent = '1';
+                        const currentPageSpan = document.createElement('span');
+                        currentPageSpan.textContent = '1';
                         
                         pageNumContainer.appendChild(document.createTextNode('Page '));
-                        pageNumContainer.appendChild(currentPage);
+                        pageNumContainer.appendChild(currentPageSpan);
                         pageNumContainer.appendChild(document.createTextNode(` of ${pdf.numPages}`));
                         
                         // Add event listeners
@@ -329,7 +329,7 @@ function previewDocument(doc) {
                         nextBtn.addEventListener('click', function() {
                             if (pageNum < pdf.numPages) {
                                 pageNum++;
-                                renderPage(pageNum);
+                                renderPage(pageNum, currentPageSpan);
                                 prevBtn.disabled = false;
                                 if (pageNum === pdf.numPages) {
                                     nextBtn.disabled = true;
@@ -340,7 +340,7 @@ function previewDocument(doc) {
                         prevBtn.addEventListener('click', function() {
                             if (pageNum > 1) {
                                 pageNum--;
-                                renderPage(pageNum);
+                                renderPage(pageNum, currentPageSpan);
                                 nextBtn.disabled = false;
                                 if (pageNum === 1) {
                                     prevBtn.disabled = true;
@@ -369,9 +369,9 @@ function previewDocument(doc) {
                     page.render(renderContext);
                     
                     // Function to render a specific page
-                    function renderPage(num) {
+                    function renderPage(num, pageSpan) {
                         // Update page info
-                        currentPage.textContent = num;
+                        pageSpan.textContent = num;
                         
                         // Get the page
                         pdf.getPage(num).then(function(page) {
