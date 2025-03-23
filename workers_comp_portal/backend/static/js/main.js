@@ -13,6 +13,25 @@ document.addEventListener('DOMContentLoaded', function() {
     if (selectedOrder) {
         loadOrderDetails(selectedOrder);
     }
+
+    // Sidebar toggle functionality
+    const sidebar = document.getElementById('sidebar');
+    const toggleButton = document.getElementById('toggle-sidebar');
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+
+    // Set initial state
+    if (isCollapsed) {
+        sidebar.classList.add('w-16');
+        sidebar.classList.remove('w-64');
+    }
+
+    toggleButton.addEventListener('click', function() {
+        sidebar.classList.toggle('w-64');
+        sidebar.classList.toggle('w-16');
+        
+        // Save state to localStorage
+        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('w-16'));
+    });
 });
 
 
